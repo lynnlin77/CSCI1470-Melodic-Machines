@@ -1,4 +1,5 @@
 import utils
+import os
 
 def create_metadata(tracks_path, subset='small', columns = [('track', 'title'), ('track', 'genre_top'), ('artist', 'name')]):
     tracks = utils.load(tracks_path)
@@ -8,5 +9,7 @@ def create_metadata(tracks_path, subset='small', columns = [('track', 'title'), 
     result.to_csv('metadata.csv', index=True)
 
 if __name__ == '__main__':
-    tracks_path = 'tracks.csv'  # Adjust the path as necessary
+    current_dir = os.path.dirname(__file__)
+    tracks_path = os.path.join(current_dir, "..", "..", 'tracks.csv')  # Adjust the path as necessary
     create_metadata(tracks_path)
+    
