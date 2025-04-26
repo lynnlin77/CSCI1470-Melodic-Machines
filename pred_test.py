@@ -14,9 +14,9 @@ def generate_samples_for_ids(model_dir,
                              ids,
                              output_dir,
                              T_steps=100,
-                             artist_pkl='artist_encoder.pkl',
-                             genre_pkl='genre_encoder.pkl',
-                             norm_json='norm_params.json'):
+                             artist_pkl='diffusion_data/artist_encoder.pkl',
+                             genre_pkl='diffusion_data/genre_encoder.pkl',
+                             norm_json='diffusion_data/norm_params.json'):
     """
     Load a SavedModel and generate spectrogram samples for a batch of track IDs in one go.
 

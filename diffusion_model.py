@@ -234,14 +234,14 @@ if __name__ == "__main__":
 
 # python diffusion_model.py ^
 #   --pickle_dir ../tracks_data/ ^
-#   --train_list diffusion_data/train.pkl ^
-#   --test_list diffusion_data/test.pkl ^
+#   --train_list diffusion_data/train8.pkl ^
+#   --test_list diffusion_data/test2.pkl ^
 #   --artist_pkl diffusion_data/artist_encoder.pkl ^
 #   --genre_pkl diffusion_data/genre_encoder.pkl ^
 #   --output_dir . ^
 #   --hidden_dim 64 ^
 #   --T_steps 100 ^
 #   --batch_size 32 ^
-#   --epochs 10 ^
+#   --epochs 2 ^
 #   --norm minmax ^
 #   --learning_rate 1e-4
