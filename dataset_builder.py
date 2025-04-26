@@ -3,10 +3,11 @@ import argparse
 import pandas as pd
 import numpy as np
 import librosa
+import soundfile as sf
 import pickle
 from sklearn.preprocessing import LabelEncoder
 
-# python preprocessing.py ^
+# python dataset_builder.py ^
 #   --metadata_csv "./FMA metadata/metadata.csv" ^
 #   --checksum "../fma_small/checksums" ^
 #   --audio_dir "../fma_small/" ^
@@ -33,8 +34,8 @@ def parse_args():
 
 def preprocess_text(text):
     """Basic text cleaning for strings."""
-    # if not isinstance(text, str):
-    #     return ''
+    if not isinstance(text, str):
+        return ''
     txt = text.lower().strip()
     return ''.join(ch for ch in txt if ch.isalnum() or ch.isspace())
 
@@ -60,34 +61,38 @@ def process_track(row, mapping, args):
     if tid not in mapping:
         print(f"Warning: {tid} not in checksum.")
         return
+    file_path = os.path.join(args.audio_dir, mapping[tid])
     # Check if the audio file exists
-    if not os.path.exists(os.path.join(args.audio_dir, mapping[tid])):
+    if not os.path.exists(file_path):
+        print(f"Warning: {mapping[tid]} not found.")
         return
-    # Load audio file
-    y, _ = librosa.load(
-        os.path.join(args.audio_dir, mapping[tid]), sr=args.sr,
-        duration=args.duration
-    )
-    S = np.abs(librosa.stft(y, n_fft=args.n_fft, hop_length=args.hop_length))
-    if args.log_scale:
-        S = librosa.amplitude_to_db(S, ref=np.max)
+    try:
+        # Load audio file
+        y, _ = librosa.load(
+            file_path, sr=args.sr,
+            duration=args.duration
+        )
+        S = np.abs(librosa.stft(y, n_fft=args.n_fft, hop_length=args.hop_length))
+        if args.log_scale:
+            S = librosa.amplitude_to_db(S, ref=np.max)
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    out = os.path.join(args.output_dir, f"{tid}_spectrogram.pkl")
-    data = {
-        'track_id': tid,
-        'spectrogram': S,
-        'metadata': {
-            'track_title': row['track_title_clean'],
-            'artist_name': row['artist_name_clean'],
-            'genre': row['track_genre_top'],
-            'genre_id': int(row['genre_id'])
+        os.makedirs(args.output_dir, exist_ok=True)
+        out = os.path.join(args.output_dir, f"{tid}_spectrogram.pkl")
+        data = {
+            'track_id': tid,
+            'spectrogram': S,
+            'metadata': {
+                'track_title': row['track_title_clean'],
+                'artist_name': row['artist_name_clean'],
+                'genre': row['track_genre_top'],
+                'genre_id': int(row['genre_id'])
+            }
         }
-    }
-    with open(out, 'wb') as f:
-        pickle.dump(data, f)
-    print(f"Saved {tid} shape={S.shape} to {out}")
-
+        with open(out, 'wb') as f:
+            pickle.dump(data, f)
+        # print(f"Saved {tid} shape={S.shape} to {out}")
+    except Exception as e:
+        print(f"Error processing {tid} at {file_path}: {str(e)}")
 
 def preprocess_metadata(csv_path):
     """
