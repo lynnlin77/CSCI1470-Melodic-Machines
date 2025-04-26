@@ -239,3 +239,64 @@ class TransformerModel(tf.keras.Model):
         dec_output = self.decoder(x, training, mask)
         final_output = self.final_layer(dec_output)
         return final_output
+    
+
+
+loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction='none')
+
+def loss_function(real, pred):
+    """
+    Computes loss ignoring padding tokens
+    """
+    mask = tf.math.logical_not(tf.math.equal(real, 0)) 
+    loss_ = loss_object(real, pred)
+    mask = tf.cast(mask, dtype=loss_.dtype)
+    loss_ *= mask  
+    return tf.reduce_sum(loss_) / tf.reduce_sum(mask)
+
+optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
+
+
+@tf.function
+def train_step(model, inp, tar):
+    """
+    Single training step
+    Args:
+        model: Transformer model
+        inp: input sequence (batch_size, seq_len)
+        tar: target sequence (batch_size, seq_len)
+    Returns:
+        loss value
+    """
+    with tf.GradientTape() as tape:
+        predictions = model(inp, training=True)
+        loss = loss_function(tar, predictions)
+
+    gradients = tape.gradient(loss, model.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+    return loss
+
+
+def train(model, dataset, epochs):
+    """
+    Trains the model
+    Args:
+        model: TransformerModel
+        dataset: tf.data.Dataset yielding (input, target) pairs
+        epochs: number of epochs to train
+    """
+    for epoch in range(epochs):
+        total_loss = 0
+        num_batches = 0
+
+        for batch, (inp, tar) in enumerate(dataset):
+            batch_loss = train_step(model, inp, tar)
+            total_loss += batch_loss
+            num_batches += 1
+
+            if batch % 100 == 0:
+                tf.print('Epoch', epoch+1, 'Batch', batch, 'Loss', batch_loss)
+
+        epoch_loss = total_loss / num_batches
+        print(f'Epoch {epoch+1} Loss: {epoch_loss:.4f}')
+
