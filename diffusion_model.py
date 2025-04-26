@@ -234,8 +234,8 @@ if __name__ == "__main__":
 
 # python diffusion_model.py ^
 #   --pickle_dir ../tracks_data/ ^
-#   --train_list train8.pkl ^
-#   --test_list test2.pkl ^
+#   --train_list diffusion_data/train.pkl ^
+#   --test_list diffusion_data/test.pkl ^
 #   --artist_pkl diffusion_data/artist_encoder.pkl ^
 #   --genre_pkl diffusion_data/genre_encoder.pkl ^
 #   --output_dir . ^
