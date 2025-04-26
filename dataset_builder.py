@@ -106,8 +106,10 @@ def preprocess_metadata(csv_path):
     df['track_id'] = df['track_id'].astype(int).astype(str).str.zfill(6)
     df['track_title_clean'] = df['track_title'].apply(preprocess_text)
     df['artist_name_clean'] = df['artist_name'].apply(preprocess_text)
-    le = LabelEncoder()
-    df['genre_id'] = le.fit_transform(df['track_genre_top'].astype(str))
+    # le = LabelEncoder()
+    # df['genre_id'] = le.fit_transform(df['track_genre_top'].astype(str))
+    # le_artist = LabelEncoder()
+    # df['artist_id'] = le_artist.fit_transform(df['artist_name_clean'].astype(str))
     return df
 
 def main():
