@@ -242,14 +242,20 @@ def main():
         print(f"Epoch {epoch+1}/{args.epochs}")
         total, batches = 0, 0
         # Training
+        i = 0
         for batch in batch_generator(np.random.permutation(train_ids), args.batch_size):
             x0, a_id, g_id = load_batch(batch, args.pickle_dir, artist_le, genre_le,
                                         batch_size=args.batch_size, norm_method=args.norm)
             loss = train_step(diffuser, x0, a_id, g_id, optimizer)
             total += loss; batches += 1
+            i += 1
+            if i % 10 == 0:  # Print every 10 batches
+                print(f"Batch {i}/{len(train_ids)//args.batch_size} - Loss: {loss:.4f}", end='\r')
+        print()  # New line after batch loss
         train_loss = total / batches
         train_losses.append(float(train_loss))  # append new train loss
         print(f"Train Loss: {train_loss:.4f}")
+    print("Training complete.")
 
         # Validation
         total, batches = 0, 0
