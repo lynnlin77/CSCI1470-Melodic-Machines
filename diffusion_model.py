@@ -255,7 +255,6 @@ def main():
         train_loss = total / batches
         train_losses.append(float(train_loss))  # append new train loss
         print(f"Train Loss: {train_loss:.4f}")
-    print("Training complete.")
 
         # Validation
         total, batches = 0, 0
