@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from preprocess import load_encoders, load_batch, batch_generator
 import json  # for persisting loss history
 
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # Suppress TensorFlow warnings
+
 # os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # Set to the GPU you want to use
 # Set memory growth for GPU to avoid OOM errors
 gpus = tf.config.list_physical_devices("GPU")
@@ -250,7 +252,7 @@ def main():
             total += loss; batches += 1
             i += 1
             if i % 10 == 0:  # Print every 10 batches
-                print(f"Batch {i}/{len(train_ids)//args.batch_size} - Loss: {loss:.4f}", end='\r')
+                print(f"Batch {i}/{len(train_ids)//args.batch_size} - Loss: {total / batches:.4f}", end='\r')
         print()  # New line after batch loss
         train_loss = total / batches
         train_losses.append(float(train_loss))  # append new train loss
