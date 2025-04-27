@@ -9,6 +9,13 @@ import matplotlib.pyplot as plt
 from preprocess import load_encoders, load_batch, batch_generator
 import json  # for persisting loss history
 
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # Set to the GPU you want to use
+# Set memory growth for GPU to avoid OOM errors
+gpus = tf.config.list_physical_devices("GPU")
+print("Physical GPUs:", gpus)
+if gpus:
+    tf.config.experimental.set_memory_growth(gpus[0], True)
+
 @register_keras_serializable()
 class ConditionalUNet(Model):
     def __init__(self, freq_bins, time_frames, hidden_dim, num_artists, num_genres, **kwargs):
