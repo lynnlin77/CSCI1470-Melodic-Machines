@@ -11,7 +11,6 @@ import json  # for persisting loss history
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # Suppress TensorFlow warnings
 
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # Set to the GPU you want to use
 # Set memory growth for GPU to avoid OOM errors
 gpus = tf.config.list_physical_devices("GPU")
 print("Physical GPUs:", gpus)
@@ -21,9 +20,7 @@ if gpus:
 @register_keras_serializable()
 class ConditionalUNet(Model):
     def __init__(self, freq_bins, time_frames, hidden_dim, num_artists, num_genres, **kwargs):
-        # Ensure parent Model __init__ handles trainable, dtype, etc.
         super().__init__(**kwargs)
-        # Save initialization args for serialization
         self.freq_bins = freq_bins
         self.time_frames = time_frames
         self.hidden_dim = hidden_dim
@@ -95,7 +92,6 @@ class ConditionalUNet(Model):
         return self.outc(h)
 
     def get_config(self):
-        # Return config for serialization
         config = super().get_config()
         config.update({
             'freq_bins': self.freq_bins,
@@ -108,7 +104,6 @@ class ConditionalUNet(Model):
 
     @classmethod
     def from_config(cls, config):
-        # Reconstruct from config
         return cls(
             config.pop('freq_bins'),
             config.pop('time_frames'),
@@ -176,7 +171,6 @@ def test_step(diffuser, x0, artist_id, genre_id):
     eps_pred = diffuser.model(x_t, t_n, artist_id, genre_id)
     return tf.reduce_mean(tf.square(eps - eps_pred))
 
-
 def main():
     parser = argparse.ArgumentParser(description="Diffusion Model for Spectrograms")
     parser.add_argument('--pickle_dir', required=True)
@@ -206,7 +200,8 @@ def main():
     unet = ConditionalUNet(freq_bins, time_frames, args.hidden_dim,
                             len(artist_le.classes_), len(genre_le.classes_))
     diffuser = SpectrogramDiffusion(unet, T=args.T_steps)
-    optimizer = tf.keras.optimizers.Adam(args.learning_rate)
+
+    optimizer = tf.keras.optimizers.Adam(args.learning_rate, clipnorm=1.0)
 
     # Prepare checkpointing (only model & epoch)
     checkpoint_epoch = tf.Variable(0, dtype=tf.int64)
@@ -231,12 +226,19 @@ def main():
     if os.path.exists(loss_history_path):
         with open(loss_history_path, 'r') as f:
             hist = json.load(f)
-        train_losses = hist.get('train_losses', [])  # existing train losses
-        val_losses   = hist.get('val_losses', [])    # existing validation losses
+        train_losses = hist.get('train_losses', [])
+        val_losses   = hist.get('val_losses', [])
         print(f"Loaded loss history for {len(train_losses)} epochs")
     else:
         train_losses, val_losses = [], []
         print("Initializing new loss history")
+
+    # Custom early stopping variables
+    best_val_loss = float('inf')
+    best_weights = None
+    patience = 10
+    wait = 0
+    stopped_epoch = 0
 
     # Training loop
     start = int(checkpoint.epoch)
@@ -244,18 +246,16 @@ def main():
         print(f"Epoch {epoch+1}/{args.epochs}")
         total, batches = 0, 0
         # Training
-        i = 0
         for batch in batch_generator(np.random.permutation(train_ids), args.batch_size):
             x0, a_id, g_id = load_batch(batch, args.pickle_dir, artist_le, genre_le,
                                         batch_size=args.batch_size, norm_method=args.norm)
             loss = train_step(diffuser, x0, a_id, g_id, optimizer)
             total += loss; batches += 1
-            i += 1
-            if i % 10 == 0:  # Print every 10 batches
-                print(f"Batch {i}/{len(train_ids)//args.batch_size} - Loss: {total / batches:.4f}", end='\r')
+            if batches % 10 == 0:  # Print every 10 batches
+                print(f"Batch {batches}/{len(train_ids)//args.batch_size} - Loss: {total / batches:.4f}", end='\r')
         print()  # New line after batch loss
         train_loss = total / batches
-        train_losses.append(float(train_loss))  # append new train loss
+        train_losses.append(float(train_loss))
         print(f"Train Loss: {train_loss:.4f}")
 
         # Validation
@@ -266,8 +266,23 @@ def main():
             loss = test_step(diffuser, x0, a_id, g_id)
             total += loss; batches += 1
         val_loss = total / batches
-        val_losses.append(float(val_loss))  # append new validation loss
+        val_losses.append(float(val_loss))
         print(f"Val   Loss: {val_loss:.4f}")
+
+        # Custom early stopping logic
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_weights = unet.get_weights()  # Save the best weights
+            wait = 0
+            print(f"New best validation loss: {best_val_loss:.4f}")
+        else:
+            wait += 1
+            print(f"No improvement in validation loss for {wait} epochs")
+            if wait >= patience:
+                stopped_epoch = epoch + 1
+                print(f"Early stopping on epoch {stopped_epoch}")
+                unet.set_weights(best_weights)  # Restore the best weights
+                break
 
         # Persist updated loss history to file
         with open(loss_history_path, 'w') as f:
@@ -281,16 +296,27 @@ def main():
         path = manager.save()
         print(f"Checkpoint saved: {path}")
 
+    # If early stopping occurred, log the final restored loss
+    if stopped_epoch > 0:
+        total, batches = 0, 0
+        for batch in batch_generator(test_ids, args.batch_size):
+            x0, a_id, g_id = load_batch(batch, args.pickle_dir, artist_le, genre_le,
+                                        batch_size=args.batch_size, norm_method=args.norm)
+            loss = test_step(diffuser, x0, a_id, g_id)
+            total += loss; batches += 1
+        final_val_loss = total / batches
+        print(f"Final validation loss after restoring best weights: {final_val_loss:.4f}")
+
     # Save final model with .keras extension
     os.makedirs(args.output_dir, exist_ok=True)
     model_path = os.path.join(args.output_dir, 'diffusion_saved.keras')
-    unet.save(model_path)  # save in Keras native format
+    unet.save(model_path)
 
     # Plot loss curves including full history
     epochs = range(1, len(train_losses) + 1)
     plt.figure()
-    plt.plot(epochs, train_losses, label='Train Loss')  # full history
-    plt.plot(epochs, val_losses,   label='Val   Loss')  # full history
+    plt.plot(epochs, train_losses, label='Train Loss')
+    plt.plot(epochs, val_losses,   label='Val   Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
@@ -303,16 +329,16 @@ if __name__ == "__main__":
     main()
 
 
-# python diffusion_model.py ^
-#   --pickle_dir ../tracks_data/ ^
-#   --train_list diffusion_data/train8.pkl ^
-#   --test_list diffusion_data/test2.pkl ^
-#   --artist_pkl diffusion_data/artist_encoder.pkl ^
-#   --genre_pkl diffusion_data/genre_encoder.pkl ^
-#   --output_dir . ^
-#   --hidden_dim 64 ^
-#   --T_steps 100 ^
-#   --batch_size 32 ^
-#   --epochs 2 ^
-#   --norm minmax ^
+# time python diffusion_model.py \
+#   --pickle_dir ../tracks_data/ \
+#   --train_list diffusion_data/train.pkl \
+#   --test_list diffusion_data/test.pkl \
+#   --artist_pkl diffusion_data/artist_encoder.pkl \
+#   --genre_pkl diffusion_data/genre_encoder.pkl \
+#   --output_dir . \
+#   --hidden_dim 64 \
+#   --T_steps 200 \
+#   --batch_size 32 \
+#   --epochs 30 \
+#   --norm minmax \
 #   --learning_rate 1e-4

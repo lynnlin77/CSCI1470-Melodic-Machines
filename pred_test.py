@@ -28,11 +28,11 @@ def generate_samples_for_ids(model_dir,
     artist_le, genre_le = load_encoders(artist_pkl, genre_pkl)
 
     # Determine spectrogram dims
-    sample_path = os.path.join(pickle_dir, f"{ids[0]}_spectrogram.pkl")
-    with open(sample_path, 'rb') as f:
-        S0 = pickle.load(f)['spectrogram']
-    freq_bins, time_frames = S0.shape
-    shape = (freq_bins, time_frames, 1)
+    # sample_path = os.path.join(pickle_dir, f"{ids[0]}_spectrogram.pkl")
+    # with open(sample_path, 'rb') as f:
+    #     S0 = pickle.load(f)['spectrogram']
+    # freq_bins, time_frames = S0.shape
+    shape = (513, 431, 1)
 
     # Load SavedModel including custom_objects
     unet = tf.keras.models.load_model(
@@ -108,8 +108,8 @@ if __name__ == '__main__':
     main()
 
 
-# python pred_test.py ^
-#   --model_dir diffusion_saved.keras ^
-#   --pickle_dir ../tracks_data ^
-#   --test_list "['056466']" ^
+# python pred_test.py \
+#   --model_dir diffusion_saved.keras \
+#   --pickle_dir ../tracks_data \
+#   --test_list "['067331']" \
 #   --output_dir diffusion_test_sample/

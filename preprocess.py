@@ -7,6 +7,11 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 
+# Hardcoded spectrogram target dimensions
+TARGET_FREQ_BINS = 513
+TARGET_TIME_FRAMES = 431
+TARGET_SHAPE = (TARGET_FREQ_BINS, TARGET_TIME_FRAMES)
+
 
 def build_encoders(artist_names, genre_names):
     """
@@ -107,6 +112,18 @@ def encode_conditions(artist_names, genre_names, artist_le, genre_le):
     return a_ids, g_ids
 
 
+def pad_or_trim(spec, target_shape=TARGET_SHAPE):
+    """Pad with zeros or truncate spectrogram to target_shape."""
+    f, t = spec.shape
+    th, tw = target_shape
+    if f < th or t < tw:
+        out = np.zeros(target_shape, dtype=spec.dtype)
+        out[:f, :t] = spec
+        return out
+    else:
+        return spec[:th, :tw]
+
+
 def load_batch(track_ids, pickle_dir, artist_le, genre_le,
                batch_size=16, norm_method='minmax'):
     """Load and preprocess a batch; return numpy arrays for model."""
@@ -115,10 +132,15 @@ def load_batch(track_ids, pickle_dir, artist_le, genre_le,
         path = os.path.join(pickle_dir, f"{tid}_spectrogram.pkl")
         with open(path, 'rb') as f:
             d = pickle.load(f)
+        # Normalize
         spec = preprocess_spectrogram(d['spectrogram'], method=norm_method)
+        # Pad or trim to fixed size
+        spec = pad_or_trim(spec)
+        # Add channel dimension
         specs.append(spec[..., np.newaxis])
         arts.append(d['metadata']['artist_name'])
         gens.append(d['metadata']['genre'])
+    # Stack into batch array
     spec_batch = np.stack(specs, axis=0)
     a_ids, g_ids = encode_conditions(arts, gens, artist_le, genre_le)
     return spec_batch, a_ids, g_ids
