@@ -2,35 +2,10 @@ import os
 import glob
 import pickle
 import argparse
-import json
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-
-
-def compute_and_save_global_norm(pickle_dir, out_json='norm_params.json'):
-    """
-    Compute dataset-wide min/max over all spectrogram pickles and save to JSON.
-    """
-    vmin, vmax = float('inf'), float('-inf')
-    for path in glob.glob(os.path.join(pickle_dir, '*_spectrogram.pkl')):
-        with open(path, 'rb') as f:
-            S = pickle.load(f)['spectrogram']
-        vmin = min(vmin, float(np.min(S)))
-        vmax = max(vmax, float(np.max(S)))
-    with open(out_json, 'w') as f:
-        json.dump({'vmin': vmin, 'vmax': vmax}, f)
-    print(f"Saved global norm params {{'vmin': {vmin}, 'vmax': {vmax}}} to {out_json}")
-
-
-def load_global_norm(json_path='diffusion_data/norm_params.json'):
-    """
-    Load global min/max normalization parameters from JSON.
-    """
-    with open(json_path, 'r') as f:
-        p = json.load(f)
-    return p['vmin'], p['vmax']
 
 
 def build_encoders(artist_names, genre_names):
@@ -68,9 +43,6 @@ def train_test_split_artists(pickle_dir, train_list, test_list,
     Drop artists with only one track, then split remaining tracks into train/test.
     Save track IDs lists and encoders.
     """
-    # Compute and save global norm params
-    compute_and_save_global_norm(pickle_dir)
-
     # Map artists to their track IDs and collect conditions
     artist_to_ids = {}
     artist_names = []
@@ -94,7 +66,6 @@ def train_test_split_artists(pickle_dir, train_list, test_list,
         for tid in artist_to_ids[art]:
             multi_ids.append(tid)
             multi_art_names.append(art)
-            # reload genre per track
             with open(os.path.join(pickle_dir, f"{tid}_spectrogram.pkl"),'rb') as f:
                 multi_gen_names.append(pickle.load(f)['metadata']['genre'])
 
@@ -117,10 +88,11 @@ def train_test_split_artists(pickle_dir, train_list, test_list,
 
 
 def preprocess_spectrogram(spec, method='minmax'):
-    """Normalize a spectrogram matrix using global or z-score."""
+    """Normalize a spectrogram matrix using fixed -80 to 0 dB range or z-score."""
     if method == 'minmax':
-        vmin, vmax = load_global_norm()
-        return (spec - vmin) / (vmax - vmin + 1e-6)
+        # always normalize from -80dB to 0dB
+        vmin, vmax = -80.0, 0.0
+        return (spec - vmin) / (vmax - vmin)  # maps [-80,0] to [0,1]
     elif method == 'zscore':
         mu, sigma = spec.mean(), spec.std()
         return (spec - mu) / (sigma + 1e-6)
@@ -169,7 +141,7 @@ def main():
     parser.add_argument('--norm', choices=['minmax','zscore'], default='minmax')
     args = parser.parse_args()
 
-    # Split dataset and build/save encoders & norm params
+    # Split dataset and build/save encoders
     train_test_split_artists(
         args.pickle_dir, args.train_list, args.test_list,
         args.artist_pkl, args.genre_pkl
