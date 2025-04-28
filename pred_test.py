@@ -111,6 +111,6 @@ if __name__ == '__main__':
 # python pred_test.py \
 #   --model_dir diffusion_saved.keras \
 #   --pickle_dir ../tracks_data \
-#   --test_list "['049477']" \
-#   --output_dir diffusion_data/generated_samples_3
+#   --test_list "['056466']" \
+#   --output_dir diffusion_data/generated_samples
   

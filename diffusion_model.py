@@ -1,4 +1,5 @@
 import tensorflow as tf
+tf.keras.backend.clear_session()
 from tensorflow.keras import layers, Model
 from tensorflow.keras.utils import register_keras_serializable  # for serialization support
 import argparse
@@ -337,7 +338,7 @@ if __name__ == "__main__":
 #   --genre_pkl diffusion_data/genre_encoder.pkl \
 #   --output_dir . \
 #   --hidden_dim 64 \
-#   --T_steps 200 \
+#   --T_steps 100 \
 #   --batch_size 32 \
 #   --epochs 30 \
 #   --norm minmax \
