@@ -18,7 +18,7 @@ def generate_samples_for_ids(model_dir,
                              pickle_dir,
                              ids,
                              output_dir,
-                             T_steps=100,
+                             T_steps=200,
                              artist_pkl='diffusion_data/artist_encoder.pkl',
                              genre_pkl='diffusion_data/genre_encoder.pkl'):
     """
@@ -89,7 +89,7 @@ def main():
     parser.add_argument('--output_dir', required=True, help='Directory to save generated pickles')
     parser.add_argument('--artist_pkl', default='diffusion_data/artist_encoder.pkl')
     parser.add_argument('--genre_pkl',  default='diffusion_data/genre_encoder.pkl')
-    parser.add_argument('--T_steps',    type=int, default=100)
+    parser.add_argument('--T_steps',    type=int, default=200)
     args = parser.parse_args()
 
     ids = ast.literal_eval(args.test_list)
@@ -111,5 +111,6 @@ if __name__ == '__main__':
 # python pred_test.py \
 #   --model_dir diffusion_saved.keras \
 #   --pickle_dir ../tracks_data \
-#   --test_list "['067331']" \
-#   --output_dir diffusion_test_sample/
+#   --test_list "['049477']" \
+#   --output_dir diffusion_data/generated_samples_3
+  
