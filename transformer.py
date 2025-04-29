@@ -91,7 +91,6 @@ class ConditionalTransformer(tf.keras.Model):
     
     
 def prepare_data(csv_file='train.csv'):
-    """Prepare data from CSV"""
     df = pd.read_csv(csv_file)
     
     artist2id = {a:i for i,a in enumerate(df['artist'].unique())}
@@ -120,7 +119,6 @@ def prepare_data(csv_file='train.csv'):
     return df, tok, artist2id, genre2id
 
 def train_model(df, tokenizer, artist2id, genre2id, epochs=20, batch_size=32, save_path='model_weights.weights.h5'):
-    """Train the model"""
     sequences = tokenizer.texts_to_sequences(df['lyric'].astype(str).tolist())
     
     
@@ -189,9 +187,6 @@ def train_model(df, tokenizer, artist2id, genre2id, epochs=20, batch_size=32, sa
     return model
 
 def generate_lyrics(model, artist_id, genre_id, tokenizer, max_length=100, temperature=1.0, start_text=""):
-    """
-    Generate lyrics conditioned on artist and genre
-    """
     model_max_seq_len = 128
     
     if start_text:
@@ -242,7 +237,6 @@ def generate_lyrics(model, artist_id, genre_id, tokenizer, max_length=100, tempe
     
     return lyrics
 def load_model_and_resources():
-    """Load the trained model and resources"""
     
     with open("tokenizer.json", "r") as f:
         tokenizer_json = json.load(f)
@@ -310,9 +304,9 @@ def main():
     
     
     try:
-        temp = float(input("Enter temperature (0.5-1.5, higher = more random): ") or "0.8")
+        temp = 1.0
     except ValueError:
-        temp = 0.8
+        temp = 1.0
     
     
     print(f"\nGenerating lyrics in the style of {artist_name} ({genre_name})...\n")
@@ -333,7 +327,6 @@ def main():
     print("=" * 50)
 
 def format_lyrics(lyrics):
-    """Format lyrics for better readability"""
     lyrics = ' '.join(lyrics.split())
     
     for marker in ['pre', 'refrain', 'breakdown', 'post']:
