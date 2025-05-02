@@ -1,124 +1,108 @@
 import os
 import pickle
 import argparse
-import json
 import numpy as np
 import tensorflow as tf
-from preprocess import load_encoders, load_global_norm
-from diffusion_model import SpectrogramDiffusion
+from preprocess import load_encoders
 import ast
+from diffusion_model import ConditionalUNet, SpectrogramDiffusion  # import custom class
+
+# Set memory growth for GPU to avoid OOM errors
+gpus = tf.config.list_physical_devices("GPU")
+print("Physical GPUs:", gpus)
+if gpus:
+    tf.config.experimental.set_memory_growth(gpus[0], True)
 
 
-def generate_samples_for_ids(model_dir,
-                             pickle_dir,
-                             ids,
-                             output_dir,
-                             T_steps=100,
-                             artist_pkl='diffusion_data/artist_encoder.pkl',
-                             genre_pkl='diffusion_data/genre_encoder.pkl',
-                             norm_json='diffusion_data/norm_params.json'):
+def generate_sample_for_id(model_dir,
+                           pickle_dir,
+                           track_id,
+                           output_dir,
+                           T_steps=200,
+                           artist_pkl='diffusion_data/artist_encoder.pkl',
+                           genre_pkl='diffusion_data/genre_encoder.pkl'):
     """
-    Load a SavedModel and generate spectrogram samples for a batch of track IDs in one go.
-
-    Args:
-        model_dir (str): Directory of the SavedModel (exported via unet.save).
-        pickle_dir (str): Directory containing input spectrogram pickles.
-        ids (list of str): List of track IDs to generate.
-        output_dir (str): Where to write one combined pickle of generated samples.
-        T_steps (int): Number of diffusion timesteps.
-        artist_pkl, genre_pkl (str): Paths to encoder pickles.
-        norm_json (str): Path to global normalization JSON.
+    Load a SavedModel and generate one spectrogram sample for a given track ID.
+    Saves both the generated spectrogram and its associated metadata.
     """
-    # Load encoders and normalization params
+    # Load encoders
     artist_le, genre_le = load_encoders(artist_pkl, genre_pkl)
-    vmin, vmax = load_global_norm(norm_json)
 
-    # Determine spectrogram dims
-    sample_path = os.path.join(pickle_dir, f"{ids[0]}_spectrogram.pkl")
-    with open(sample_path, 'rb') as f:
-        S0 = pickle.load(f)['spectrogram']
+    # Determine spectrogram dims and metadata
+    pickle_path = os.path.join(pickle_dir, f"{track_id}_spectrogram.pkl")
+    with open(pickle_path, 'rb') as f:
+        data = pickle.load(f)
+    S0 = data['spectrogram']
+    metadata = data['metadata']
     freq_bins, time_frames = S0.shape
     shape = (freq_bins, time_frames, 1)
 
-    # Load SavedModel (includes structure + weights)
-    unet = tf.keras.models.load_model(model_dir)
+    # Load model
+    unet = tf.keras.models.load_model(
+        model_dir,
+        custom_objects={'ConditionalUNet': ConditionalUNet}
+    )
     diffuser = SpectrogramDiffusion(unet, T=T_steps)
 
-    # Prepare batch condition IDs
-    artist_names = []
-    genre_names = []
-    for tid in ids:
-        with open(os.path.join(pickle_dir, f"{tid}_spectrogram.pkl"), 'rb') as f:
-            md = pickle.load(f)['metadata']
-        artist_names.append(md['artist_name'])
-        genre_names.append(md['genre'])
-    artist_ids = artist_le.transform(artist_names)
-    genre_ids  = genre_le.transform(genre_names)
-    # Convert to tensors
-    artist_ids_t = tf.constant(artist_ids, dtype=tf.int32)
-    genre_ids_t  = tf.constant(genre_ids,  dtype=tf.int32)
+    # Encode artist and genre
+    artist_id = artist_le.transform([metadata['artist_name']])[0]
+    genre_id  = genre_le.transform([metadata['genre']])[0]
+    artist_id_t = tf.constant([artist_id], dtype=tf.int32)
+    genre_id_t  = tf.constant([genre_id], dtype=tf.int32)
 
-    batch_size = len(ids)
-    # Run diffusion sampling for the full batch
+    # Run diffusion sampling
     spec_norm = diffuser.sample(
-        batch=batch_size,
-        artist_id=artist_ids_t,
-        genre_id=genre_ids_t,
+        batch=1,
+        artist_id=artist_id_t,
+        genre_id=genre_id_t,
         shape=shape
-    )  # shape: [B, F, T, 1]
-    spec_norm = spec_norm.numpy().squeeze(-1)  # [B, F, T]
+    ).numpy().squeeze(-1)  # [F, T]
 
-    # Inverse normalization (min-max)
-    spec_rec = spec_norm * (vmax - vmin + 1e-6) + vmin  # [B, F, T]
+    # Inverse normalization (assuming [0,1] -> [-80,0] dB)
+    vmin, vmax = -80.0, 0.0
+    spec_rec = spec_norm * (vmax - vmin) + vmin  # [F, T]
 
-    # Save a single pickle containing all generated samples
+    # Prepare output
     os.makedirs(output_dir, exist_ok=True)
-    out_path = os.path.join(output_dir, 'generated_batch.pkl')
+    out_path = os.path.join(output_dir, f"{track_id}_generated.pkl")
     with open(out_path, 'wb') as f:
         pickle.dump({
-            'track_ids': ids,
-            'spectrograms': spec_rec,
-            'artist_ids': artist_ids,
-            'genre_ids': genre_ids,
-            'artist_names': artist_names,
-            'genre_names': genre_names
+            'track_id': track_id,
+            'spectrogram': spec_rec,
+            'metadata': {
+                'artist_id': int(artist_id),
+                'genre_id': int(genre_id),
+                'artist_name': metadata['artist_name'],
+                'genre': metadata['genre'],
+                'original_shape': (freq_bins, time_frames)
+            }
         }, f)
-    print(f"Saved generated batch of {batch_size} samples to {out_path}")
+    print(f"Saved generated sample and metadata for track {track_id} to {out_path}")
 
-
-def main():
-    parser = argparse.ArgumentParser(description='Generate samples via diffusion model')
-    parser.add_argument('--model_dir',  required=True, help='Path to SavedModel directory')
-    parser.add_argument('--pickle_dir', required=True, help='Directory of input spectrogram pickles')
-    parser.add_argument('--test_list',  required=True, help='Python list of test IDs, e.g. "[\'000123\']"')
-    parser.add_argument('--output_dir', required=True, help='Directory to save generated pickles')
-    parser.add_argument('--artist_pkl', default='diffusion_data/artist_encoder.pkl')
-    parser.add_argument('--genre_pkl',  default='diffusion_data/genre_encoder.pkl')
-    parser.add_argument('--norm_json',  default='diffusion_data/norm_params.json')
-    parser.add_argument('--T_steps',    type=int, default=100)
-    args = parser.parse_args()
-
-    # Parse test IDs
-    ids = ast.literal_eval(args.test_list)
-
-    generate_samples_for_ids(
-        model_dir=args.model_dir,
-        pickle_dir=args.pickle_dir,
-        ids=ids,
-        output_dir=args.output_dir,
-        T_steps=args.T_steps,
-        artist_pkl=args.artist_pkl,
-        genre_pkl=args.genre_pkl,
-        norm_json=args.norm_json
-    )
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Generate one sample via diffusion model')
+    parser.add_argument('--model_dir',  required=True, help='Path to SavedModel or .keras file')
+    parser.add_argument('--pickle_dir', required=True, help='Directory of input spectrogram pickles')
+    parser.add_argument('--track_id',   required=True, help='Single track ID to generate')
+    parser.add_argument('--output_dir', required=True, help='Directory to save generated pickle')
+    parser.add_argument('--T_steps',    type=int, default=200)
+    args = parser.parse_args()
+
+    generate_sample_for_id(
+        model_dir=args.model_dir,
+        pickle_dir=args.pickle_dir,
+        track_id=args.track_id,
+        output_dir=args.output_dir,
+        T_steps=args.T_steps,
+        artist_pkl='diffusion_data/artist_encoder.pkl',
+        genre_pkl='diffusion_data/genre_encoder.pkl'
+    )
 
 
-
-# python pred_test.py ^
-#   --model_dir diffusion_model/ ^
-#   --pickle_dir ../tracks_data ^
-#   --test_list "['056466']" ^
-#   --output_dir diffusion_test_sample/
+# python pred_test.py \
+#   --model_dir diffusion_saved.keras \
+#   --pickle_dir ../tracks_data \
+#   --track_id 000197 \
+#   --output_dir diffusion_data/generated_samples
+  

@@ -467,7 +467,6 @@ def main():
     print("=" * 50)
 
 def format_lyrics(lyrics):
-    """Format lyrics for better readability"""
     lyrics = ' '.join(lyrics.split())
     
     for marker in ['pre', 'refrain', 'breakdown', 'post']:
@@ -493,3 +492,4 @@ def format_lyrics(lyrics):
 
 if __name__ == "__main__":
     main()
+
