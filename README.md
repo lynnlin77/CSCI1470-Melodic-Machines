@@ -1,17 +1,78 @@
-Melodic Machines: A Dual-Model Approach to Artist-Conditioned Music Generation
+# Melodic Machines: A Dual-Model Approach to Artist-Conditioned Music Generation
 
-Melodic Machines is a two-stage generative system that creates artist-conditioned music by combining transformer-based lyric generation with stable diffusion-based audio synthesis. Given an artist and genre, our model outputs both stylistically consistent lyrics and audio that reflect the artist’s sonic identity.
+## Overview
+Melodic Machines is a two-stage framework for artist-conditioned music generation that combines:
+1. A transformer-based lyric generator that creates artist-style lyrics
+2. A stable diffusion model that generates artist-style spectrograms (convertible to audio)
 
-Our transformer generates lyrics in the stylistic voice of a given artist and genre, while our stable diffusion model synthesizes corresponding spectrograms to mimic that artist’s sound. The audio is reconstructed from spectrograms, enabling a full-text-to-sound generative pipeline.
+## Features
+- Artist-Conditioned Generation: Input an artist name to generate content in their style
+- Dual-Modality: Produces both lyrics and matching audio spectrograms
+- Genre Control: Additional genre parameter for finer stylistic control
+- Custom Architectures: Simplified but effective implementations tailored for music generation
 
-We trained the models using the FMA audio dataset and a refined lyrics dataset sourced from Kaggle. Due to dataset incompatibilities, the audio and lyrics models were trained on different artist sets. We performed significant preprocessing—cleaning, filtering, and converting raw data into usable formats such as spectrogram matrices—to enable conditioning on genre and artist.
+## Installation
+```bash
+git clone https://github.com/[your-username]/melodic-machines.git
+cd melodic-machines
+pip install -r requirements.txt
 
-The transformer follows a decoder-only architecture with artist/genre embedding. The stable diffusion model uses a simplified U-Net that denoises spectrograms conditioned on time step, genre, and artist embedding.
 
-Despite computational limitations, both models achieved promising results. The diffusion model captured brightness and stylistic patterns in spectrograms; the transformer produced lexically rich, artist-aligned lyrics. Our results were evaluated based on qualitative similarity, training loss, and stylistic consistency.
+### Lyric Generation
 
-Challenges included mismatched datasets, limited GPU memory, and noise in manual datasets. We addressed these by simplifying our architectures, manually refining entries, and conditioning models on artist and genre embeddings.
+```python
+from lyric_generator import generate_lyrics
 
-If extended, we would increase model complexity, dataset scale, and improve conditioning mechanisms (e.g., cross-attention or encoder-decoder frameworks). We’d also experiment with neural vocoders and joint phase/magnitude prediction to improve audio realism.
+# Generate lyrics in the style of an artist
+lyrics = generate_lyrics(artist="Taylor Swift", genre="pop", max_length=200)
+print(lyrics)
+```
 
-Melodic Machines demonstrates the feasibility and creativity of a dual-model approach to multimodal generation. It deepened our understanding of conditional modeling, audio synthesis, and the ethical implications of AI-generated creative content. This project showed us the technical and philosophical considerations of AI in the arts—and how exciting this space can be.
+### Audio Spectrogram Generation
+
+```python
+from audio_generator import generate_spectrogram, convert_to_audio
+
+# Generate and save spectrogram
+spectrogram = generate_spectrogram(artist="Dua Lipa", genre="pop")
+spectrogram.save("generated_spectrogram.png")
+
+# Convert to audio (requires additional audio processing libraries)
+audio = convert_to_audio(spectrogram)
+audio.export("generated_audio.wav", format="wav")
+```
+
+---
+
+## Datasets
+
+We used two primary datasets:
+
+- **FMA (Free Music Archive)**: For training the audio spectrogram diffusion model  
+- **Top Artists Lyrics Dataset (Kaggle)**: For training the lyric generation model  
+
+> Due to licensing restrictions, we cannot redistribute the original datasets, but preprocessing scripts are provided in the `data_processing/` directory.
+
+---
+
+##  Model Architectures
+
+### 1. Lyric Generator
+- Decoder-only Transformer
+- Artist and genre conditioning via embedding layers
+- Trained on curated lyric datasets
+
+### 2. Audio Diffusion Model
+- Simplified U-Net architecture
+- Operates on spectrogram image matrices
+- Conditioned on artist, genre, and timestep embeddings
+
+---
+
+## Results
+
+Sample outputs are available in the `examples/` directory:
+
+- Generated lyrics for various artists  
+- Original vs. generated spectrogram visual comparisons  
+- Audio samples converted from generated spectrograms  
